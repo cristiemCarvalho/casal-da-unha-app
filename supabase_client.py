@@ -20,7 +20,14 @@ def get_supabase_client() -> Any | None:
             "A dependência supabase está ausente. Instale as dependências do projeto."
         ) from error
 
-    return create_client(url, anon_key)
+    client = create_client(url, anon_key)
+    auth_session = st.session_state.get("supabase_session")
+    if auth_session:
+        client.auth.set_session(
+            auth_session["access_token"],
+            auth_session["refresh_token"],
+        )
+    return client
 
 
 def is_configured() -> bool:
@@ -35,6 +42,12 @@ def sign_in(email: str, password: str) -> tuple[Any | None, str | None]:
         response = client.auth.sign_in_with_password(
             {"email": email.strip(), "password": password}
         )
+        if response.session is None:
+            return None, "O Supabase não retornou uma sessão válida para este login."
+        st.session_state.supabase_session = {
+            "access_token": response.session.access_token,
+            "refresh_token": response.session.refresh_token,
+        }
         return response.user, None
     except Exception as error:
         return None, f"Não foi possível entrar: {error}"
@@ -48,6 +61,11 @@ def sign_up(email: str, password: str) -> tuple[Any | None, str | None]:
         response = client.auth.sign_up(
             {"email": email.strip(), "password": password}
         )
+        if response.session is not None:
+            st.session_state.supabase_session = {
+                "access_token": response.session.access_token,
+                "refresh_token": response.session.refresh_token,
+            }
         return response.user, None
     except Exception as error:
         return None, f"Não foi possível criar a conta: {error}"
@@ -57,6 +75,7 @@ def sign_out() -> None:
     client = get_supabase_client()
     if client is not None:
         client.auth.sign_out()
+    st.session_state.pop("supabase_session", None)
 
 
 def current_user_id() -> str | None:
@@ -71,6 +90,9 @@ def ensure_studio(name: str = "Meu Studio", primary_color: str = "#E91E63") -> d
     client = get_supabase_client()
     if client is None:
         raise RuntimeError("Supabase não está configurado.")
+    user_id = current_user_id()
+    if user_id is None:
+        raise RuntimeError("Sessão Supabase expirada. Faça login novamente.")
     result = client.rpc("create_studio_for_user").execute()
     if not result.data:
         raise RuntimeError("Não foi possível criar ou recuperar o estúdio da usuária.")

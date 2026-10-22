@@ -318,7 +318,7 @@ def render_autenticacao():
                         st.error(erro)
                     else:
                         st.success("Conta criada. Verifique seu e-mail para confirmar o acesso.")
-                        if usuario is not None:
+                        if usuario is not None and st.session_state.get("supabase_session"):
                             st.session_state.auth_user = usuario
                             st.rerun()
 
