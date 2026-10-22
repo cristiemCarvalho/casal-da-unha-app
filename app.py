@@ -18,6 +18,7 @@ from supabase_client import (
     update_row,
     upsert_row,
     upload_photo,
+    verify_email_token,
 )
 
 
@@ -283,6 +284,19 @@ def render_autenticacao():
         if st.button("Entrar no modo demonstração"):
             st.session_state.demo_mode = True
             st.session_state.auth_user = {"email": "demo@casaldaunha.local"}
+            st.rerun()
+        return
+
+    token_hash = st.query_params.get("token_hash")
+    confirmation_type = st.query_params.get("type", "signup")
+    if token_hash:
+        usuario, erro = verify_email_token(token_hash, confirmation_type)
+        if erro:
+            st.error(erro)
+        else:
+            st.session_state.auth_user = usuario
+            st.query_params.clear()
+            st.success("E-mail confirmado. Sua conta está pronta.")
             st.rerun()
         return
 

@@ -53,13 +53,24 @@ def sign_in(email: str, password: str) -> tuple[Any | None, str | None]:
         return None, f"Não foi possível entrar: {error}"
 
 
+def app_url() -> str:
+    try:
+        return st.secrets["APP_URL"].rstrip("/")
+    except (KeyError, FileNotFoundError):
+        return "http://localhost:8501"
+
+
 def sign_up(email: str, password: str) -> tuple[Any | None, str | None]:
     client = get_supabase_client()
     if client is None:
         return None, "Configure SUPABASE_URL e SUPABASE_ANON_KEY nos Secrets."
     try:
         response = client.auth.sign_up(
-            {"email": email.strip(), "password": password}
+            {
+                "email": email.strip(),
+                "password": password,
+                "options": {"email_redirect_to": app_url()},
+            }
         )
         if response.session is not None:
             st.session_state.supabase_session = {
@@ -69,6 +80,25 @@ def sign_up(email: str, password: str) -> tuple[Any | None, str | None]:
         return response.user, None
     except Exception as error:
         return None, f"Não foi possível criar a conta: {error}"
+
+
+def verify_email_token(token_hash: str, token_type: str = "signup") -> tuple[Any | None, str | None]:
+    client = get_supabase_client()
+    if client is None:
+        return None, "Configure SUPABASE_URL e SUPABASE_ANON_KEY nos Secrets."
+    try:
+        response = client.auth.verify_otp(
+            {"token_hash": token_hash, "type": token_type}
+        )
+        if response.session is None:
+            return None, "O Supabase não retornou uma sessão após a confirmação."
+        st.session_state.supabase_session = {
+            "access_token": response.session.access_token,
+            "refresh_token": response.session.refresh_token,
+        }
+        return response.user, None
+    except Exception as error:
+        return None, f"Não foi possível confirmar o e-mail: {error}"
 
 
 def sign_out() -> None:

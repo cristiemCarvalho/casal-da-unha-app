@@ -27,6 +27,7 @@ Copie `.streamlit/secrets.toml.example` para `.streamlit/secrets.toml` e preench
 ```toml
 SUPABASE_URL = "https://seu-projeto.supabase.co"
 SUPABASE_ANON_KEY = "sua-chave-anon-publica"
+APP_URL = "https://seu-app.streamlit.app"
 ```
 
 Nunca publique `.streamlit/secrets.toml` no GitHub.
@@ -44,6 +45,25 @@ Inicie o app:
 3. Configure `SUPABASE_URL` e `SUPABASE_ANON_KEY` nos Secrets do ambiente.
 4. Confirme o e-mail da conta criada pela tela de cadastro.
 5. Não use a chave `service_role` no Streamlit.
+
+### Confirmação de e-mail
+
+No Supabase, em **Authentication > URL Configuration**:
+
+- **Site URL:** `https://casal-da-unha-app-3dez6inn5hxwnha74hptyx.streamlit.app`
+- **Redirect URLs:** adicione a mesma URL.
+
+Em **Authentication > Email Templates > Confirm signup**, use um link de confirmação
+com `token_hash`:
+
+```html
+<a href="{{ .SiteURL }}/?token_hash={{ .TokenHash }}&type=signup">
+  Confirmar meu e-mail
+</a>
+```
+
+Não use links com `#access_token` para este app: fragmentos são processados apenas
+no navegador e não chegam ao Python/Streamlit.
 
 ## Publicar no Streamlit Community Cloud
 
