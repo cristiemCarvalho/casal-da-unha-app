@@ -142,6 +142,7 @@ def load_workspace() -> dict[str, Any]:
     client = get_supabase_client()
     if client is None:
         raise RuntimeError("Supabase não está configurado.")
+    existing_studios = client.table("studios").select("*").limit(1).execute().data or []
     studio = ensure_studio()
     studio_id = studio["id"]
     data = {"studio": studio, "clients": [], "services": [], "appointments": [], "cash": [], "anamneses": [], "photos": []}
@@ -155,6 +156,7 @@ def load_workspace() -> dict[str, Any]:
     }
     for key, result in queries.items():
         data[key] = result.data or []
+    data["has_existing_studio"] = bool(existing_studios)
     return data
 
 

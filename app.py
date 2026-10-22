@@ -52,6 +52,9 @@ def inicializar_estado():
         "workspace_loaded": False,
         "client_records": {},
         "service_records": {},
+        "appointment_form_version": 0,
+        "anamnese_form_version": 0,
+        "flash_message": None,
     }
     for chave, valor in defaults.items():
         if chave not in st.session_state:
@@ -152,6 +155,8 @@ def carregar_workspace_persistente():
     st.session_state.studio_id = studio["id"]
     st.session_state.nome_estudio = studio["name"]
     st.session_state.cor_primaria = studio["primary_color"]
+    st.session_state.configurado = workspace.get("has_existing_studio", True)
+    st.session_state.modulos = {"agenda": True, "caixa": True, "anamnese": True}
     st.session_state.clientes = [item["name"] for item in workspace["clients"]]
     st.session_state.client_records = {item["name"]: item for item in workspace["clients"]}
     st.session_state.service_records = {item["id"]: item for item in workspace["services"]}
@@ -393,6 +398,8 @@ def render_onboarding():
 
 
 def render_inicio():
+    if st.session_state.flash_message:
+        st.success(st.session_state.pop("flash_message"))
     st.markdown('<div class="eyebrow">Visão geral do estúdio</div>', unsafe_allow_html=True)
     st.markdown(
         f'<section class="hero"><div class="hero-title">Olá, {st.session_state.nome_estudio} ✨</div>'
@@ -447,31 +454,56 @@ def render_agenda():
     tab_novo, tab_lista = st.tabs(["➕ Novo agendamento", "📋 Próximos atendimentos"])
 
     with tab_novo:
-        with st.form("form_novo_agendamento"):
+        form_version = st.session_state.appointment_form_version
+        with st.form(f"form_novo_agendamento_{form_version}"):
             st.subheader("Agendar cliente")
-            cliente = st.text_input("Nome da cliente")
-            telefone = st.text_input("WhatsApp da cliente", placeholder="(00) 00000-0000")
+            cliente = st.text_input("Nome da cliente", key=f"agenda_cliente_{form_version}")
+            telefone = st.text_input(
+                "WhatsApp da cliente",
+                placeholder="(00) 00000-0000",
+                key=f"agenda_telefone_{form_version}",
+            )
             servico_nome = st.selectbox(
                 "Serviço",
                 [s["nome"] for s in st.session_state.catalogo_servicos],
+                key=f"agenda_servico_{form_version}",
             )
             servico = next(s for s in st.session_state.catalogo_servicos if s["nome"] == servico_nome)
             st.caption(f"● {servico['duracao']} · R$ {servico['valor']:.2f}")
             col_data, col_hora = st.columns(2)
             with col_data:
-                data_atendimento = st.date_input("Data do atendimento")
+                data_atendimento = st.date_input("Data do atendimento", key=f"agenda_data_{form_version}")
             with col_hora:
-                horario_atendimento = st.time_input("Horário")
-            valor = st.number_input("Valor combinado (R$)", min_value=0.0, value=float(servico["valor"]), step=5.0)
+                horario_atendimento = st.time_input("Horário", key=f"agenda_horario_{form_version}")
+            valor = st.number_input(
+                "Valor combinado (R$)",
+                min_value=0.0,
+                value=float(servico["valor"]),
+                step=5.0,
+                key=f"agenda_valor_{form_version}",
+            )
             pagamento = st.selectbox(
                 "Forma de pagamento prevista",
                 ["Pix / Dinheiro", "Cartão de Crédito", "Cartão de Débito"],
+                key=f"agenda_pagamento_{form_version}",
             )
             if st.form_submit_button("📅 Confirmar agendamento"):
                 if not cliente.strip():
                     st.error("Informe o nome da cliente.")
                 else:
                     cliente = cadastrar_cliente(cliente)
+                    data_formatada = data_atendimento.strftime("%d/%m/%Y")
+                    horario_formatado = horario_atendimento.strftime("%H:%M")
+                    duplicado = any(
+                        item.get("cliente", "").casefold() == cliente.casefold()
+                        and item.get("data") == data_formatada
+                        and item.get("horario") == horario_formatado
+                        and item.get("status", "").casefold() == "agendado"
+                        for item in st.session_state.agendamentos
+                    )
+                    if duplicado:
+                        st.warning("Esse atendimento já está agendado para essa cliente, data e horário.")
+                        return
                     client_id = garantir_cliente_persistente(cliente, telefone)
                     dados_agendamento = {
                         "studio_id": st.session_state.studio_id,
@@ -487,6 +519,8 @@ def render_agenda():
                         executar_persistencia(lambda: insert_row("appointments", dados_agendamento))
                         if persistente() else None
                     )
+                    if persistente() and salvo is None:
+                        return
                     novo_id = salvo["id"] if salvo else max((a.get("id", 0) for a in st.session_state.agendamentos), default=0) + 1
                     st.session_state.agendamentos.append({
                         "id": novo_id,
@@ -495,14 +529,15 @@ def render_agenda():
                         "cliente": cliente,
                         "telefone": telefone.strip(),
                         "servico": servico["nome"],
-                        "data": data_atendimento.strftime("%d/%m/%Y"),
-                        "horario": horario_atendimento.strftime("%H:%M"),
+                        "data": data_formatada,
+                        "horario": horario_formatado,
                         "valor": valor,
                         "pagamento": pagamento,
                         "cor": servico["cor"],
                         "status": "Agendado",
                     })
-                    st.success(f"Agendamento de {cliente} salvo com sucesso!")
+                    st.session_state.appointment_form_version += 1
+                    st.session_state.flash_message = f"Agendamento de {cliente} salvo com sucesso."
                     st.rerun()
 
     with tab_lista:
@@ -655,7 +690,10 @@ def render_anamnese():
     else:
         cliente_existente = "+ Cadastrar nova cliente"
     if cliente_existente == "+ Cadastrar nova cliente":
-        nome_cliente = st.text_input("Nome completo da cliente", key="nova_cliente_anamnese")
+        nome_cliente = st.text_input(
+            "Nome completo da cliente",
+            key=f"nova_cliente_anamnese_{st.session_state.anamnese_form_version}",
+        )
     else:
         nome_cliente = cliente_existente
     if not nome_cliente.strip():
@@ -739,7 +777,9 @@ def render_anamnese():
                             "client_id",
                         )
                     )
-                st.success("Ficha técnica e aceite salvos com segurança nesta sessão.")
+                st.session_state.anamnese_form_version += 1
+                st.session_state.flash_message = "Ficha técnica e aceite salvos com sucesso."
+                st.rerun()
     render_galeria(cliente)
 
 
@@ -889,6 +929,8 @@ def render_configuracoes():
 
 
 def render_app():
+    if st.session_state.flash_message:
+        st.success(st.session_state.pop("flash_message"))
     st.sidebar.markdown(f"### 🌸 {st.session_state.nome_estudio}")
     render_usuario_sidebar()
     if st.session_state.logo_arquivo is not None:
