@@ -614,10 +614,53 @@ def render_caixa():
         return
     st.subheader("Histórico de lançamentos")
     for registro in reversed(st.session_state.caixa_registros):
-        st.markdown(
-            f"- **{registro['cliente']}** | {registro['servico']} | "
-            f"**R$ {registro['valor']:.2f}** ({registro['pagamento']})"
-        )
+        with st.container(border=True):
+            col_info, col_delete = st.columns([5, 1])
+            with col_info:
+                st.markdown(
+                    f"**{registro['data']}** · **{registro['cliente']}** · "
+                    f"{registro['servico']} · **R$ {registro['valor']:.2f}** "
+                    f"({registro['pagamento']})"
+                )
+            with col_delete:
+                remover = st.button("🗑️", key=f"remover_caixa_{registro.get('id', registro['data'] + registro['cliente'])}")
+            if remover:
+                st.session_state[f"confirmar_remocao_caixa_{registro.get('id', registro['data'] + registro['cliente'])}"] = True
+                st.rerun()
+            if st.session_state.get(
+                f"confirmar_remocao_caixa_{registro.get('id', registro['data'] + registro['cliente'])}",
+                False,
+            ):
+                st.warning("Remover este lançamento do caixa? Esta ação não pode ser desfeita.")
+                confirmar, cancelar = st.columns(2)
+                with confirmar:
+                    confirmou = st.button(
+                        "Confirmar exclusão",
+                        key=f"confirmar_exclusao_caixa_{registro.get('id', registro['data'] + registro['cliente'])}",
+                    )
+                with cancelar:
+                    cancelou = st.button(
+                        "Manter lançamento",
+                        key=f"cancelar_exclusao_caixa_{registro.get('id', registro['data'] + registro['cliente'])}",
+                    )
+                if cancelou:
+                    st.session_state.pop(
+                        f"confirmar_remocao_caixa_{registro.get('id', registro['data'] + registro['cliente'])}",
+                        None,
+                    )
+                    st.rerun()
+                if confirmou:
+                    registro_id = registro.get("id")
+                    if persistente() and registro_id:
+                        if executar_persistencia(lambda: delete_row("cash_entries", registro_id)) is None:
+                            continue
+                    st.session_state.caixa_registros.remove(registro)
+                    st.session_state.pop(
+                        f"confirmar_remocao_caixa_{registro.get('id', registro['data'] + registro['cliente'])}",
+                        None,
+                    )
+                    st.success("Lançamento removido do caixa.")
+                    st.rerun()
     total = sum(r["valor"] for r in st.session_state.caixa_registros)
     st.divider()
     st.metric("Total acumulado", f"R$ {total:.2f}")

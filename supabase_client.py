@@ -190,11 +190,12 @@ def upsert_row(table: str, row: dict[str, Any], on_conflict: str) -> dict[str, A
     return result.data[0]
 
 
-def delete_row(table: str, row_id: str) -> None:
+def delete_row(table: str, row_id: str) -> bool:
     client = get_supabase_client()
     if client is None:
         raise RuntimeError("Supabase não está configurado.")
     client.table(table).delete().eq("id", row_id).execute()
+    return True
 
 
 def upload_photo(path: str, content: bytes, content_type: str) -> str:
