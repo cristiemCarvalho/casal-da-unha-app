@@ -138,6 +138,23 @@ def ensure_studio(name: str = "Meu Studio", primary_color: str = "#E91E63") -> d
     return studio
 
 
+def upload_asset(path: str, content: bytes, content_type: str) -> str:
+    client = get_supabase_client()
+    if client is None:
+        raise RuntimeError("Supabase não está configurado.")
+    client.storage.from_("studio-assets").upload(
+        path, content, {"content-type": content_type, "upsert": "true"}
+    )
+    return path
+
+
+def signed_asset_url(path: str) -> str:
+    client = get_supabase_client()
+    if client is None:
+        raise RuntimeError("Supabase não está configurado.")
+    return client.storage.from_("studio-assets").create_signed_url(path, 3600)["signedURL"]
+
+
 def load_workspace() -> dict[str, Any]:
     client = get_supabase_client()
     if client is None:
@@ -146,6 +163,10 @@ def load_workspace() -> dict[str, Any]:
     studio = ensure_studio()
     studio_id = studio["id"]
     data = {"studio": studio, "clients": [], "services": [], "appointments": [], "cash": [], "anamneses": [], "photos": []}
+    for asset_key in ("logo_path", "background_path"):
+        path = studio.get(asset_key)
+        if path:
+            studio[asset_key.replace("_path", "_url")] = signed_asset_url(path)
     queries = {
         "clients": client.table("clients").select("*").eq("studio_id", studio_id).order("name").execute(),
         "services": client.table("services").select("*").eq("studio_id", studio_id).order("name").execute(),

@@ -15,6 +15,8 @@ from supabase_client import (
     sign_out,
     sign_up,
     signed_photo_url,
+    signed_asset_url,
+    upload_asset,
     update_row,
     upsert_row,
     upload_photo,
@@ -66,11 +68,15 @@ def aplicar_estilos():
     fundo = st.session_state.fundo_arquivo
     fundo_css = ""
     if fundo is not None:
-        mime = getattr(fundo, "type", "image/jpeg")
-        imagem = base64.b64encode(fundo.getvalue()).decode("ascii")
+        if isinstance(fundo, str):
+            imagem_css = f"url('{fundo}')"
+        else:
+            mime = getattr(fundo, "type", "image/jpeg")
+            imagem = base64.b64encode(fundo.getvalue()).decode("ascii")
+            imagem_css = f"url('data:{mime};base64,{imagem}')"
         fundo_css = (
             f"background-image: linear-gradient(rgba(255,250,251,{st.session_state.fundo_opacidade}), "
-            f"rgba(255,250,251,{st.session_state.fundo_opacidade})), url('data:{mime};base64,{imagem}');"
+            f"rgba(255,250,251,{st.session_state.fundo_opacidade})), {imagem_css};"
             "background-size: cover; background-attachment: fixed; background-position: center;"
         )
     st.markdown(
@@ -155,6 +161,9 @@ def carregar_workspace_persistente():
     st.session_state.studio_id = studio["id"]
     st.session_state.nome_estudio = studio["name"]
     st.session_state.cor_primaria = studio["primary_color"]
+    st.session_state.logo_arquivo = studio.get("logo_url")
+    st.session_state.fundo_arquivo = studio.get("background_url")
+    st.session_state.fundo_opacidade = float(studio.get("background_opacity") or 0.92)
     st.session_state.configurado = workspace.get("has_existing_studio", True)
     st.session_state.modulos = {"agenda": True, "caixa": True, "anamnese": True}
     st.session_state.clientes = [item["name"] for item in workspace["clients"]]
@@ -255,6 +264,29 @@ def persistir_cliente(nome: str, telefone: str = "") -> dict | None:
         lambda: insert_row("clients", {"studio_id": st.session_state.studio_id, "name": nome, "phone": telefone or None})
     )
     return client
+
+
+def persistir_identidade_visual(arquivo, tipo: str) -> None:
+    if not persistente() or arquivo is None:
+        return
+    user_id = current_user_id()
+    if not user_id:
+        st.error("Sessão expirada. Faça login novamente para salvar a imagem.")
+        return
+    extensao = arquivo.name.rsplit(".", 1)[-1].lower()
+    campo = "logo_path" if tipo == "logo" else "background_path"
+    caminho = f"{user_id}/{tipo}.{extensao}"
+    salvo = executar_persistencia(
+        lambda: upload_asset(caminho, arquivo.getvalue(), arquivo.type)
+    )
+    if salvo:
+        url = executar_persistencia(lambda: signed_asset_url(salvo))
+        if url:
+            st.session_state.logo_arquivo = url if tipo == "logo" else st.session_state.logo_arquivo
+            st.session_state.fundo_arquivo = url if tipo == "fundo" else st.session_state.fundo_arquivo
+            executar_persistencia(
+                lambda: update_row("studios", st.session_state.studio_id, {campo: salvo})
+            )
 
 
 def cliente_id_por_nome(nome: str) -> str | None:
@@ -945,6 +977,7 @@ def render_configuracoes():
     logo = st.file_uploader("Envie sua logo (PNG ou JPG)", type=["png", "jpg", "jpeg"])
     if logo is not None:
         st.session_state.logo_arquivo = logo
+        persistir_identidade_visual(logo, "logo")
         st.success("Logo carregada com sucesso!")
     st.divider()
     st.subheader("🎨 Atmosfera visual do app")
@@ -956,6 +989,7 @@ def render_configuracoes():
     )
     if fundo is not None:
         st.session_state.fundo_arquivo = fundo
+        persistir_identidade_visual(fundo, "fundo")
         st.success("Fundo visual atualizado. Aplique uma opacidade para manter a leitura confortável.")
     st.session_state.fundo_opacidade = st.slider(
         "Opacidade do véu de leitura",
@@ -965,6 +999,14 @@ def render_configuracoes():
         step=0.05,
         help="Valores maiores deixam o fundo mais discreto e o texto mais legível.",
     )
+    if persistente() and st.session_state.studio_id:
+        executar_persistencia(
+            lambda: update_row(
+                "studios",
+                st.session_state.studio_id,
+                {"background_opacity": st.session_state.fundo_opacidade},
+            )
+        )
     if st.session_state.fundo_arquivo is not None:
         st.image(st.session_state.fundo_arquivo, caption="Pré-visualização do fundo", use_container_width=True)
     st.divider()

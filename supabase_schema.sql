@@ -6,6 +6,9 @@ create table if not exists public.studios (
     owner_id uuid not null unique references auth.users(id) on delete cascade,
     name text not null,
     primary_color text not null default '#E91E63',
+    logo_path text,
+    background_path text,
+    background_opacity numeric(3,2) not null default 0.92,
     created_at timestamptz not null default now()
 );
 

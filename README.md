@@ -43,6 +43,7 @@ Inicie o app:
 1. Crie um projeto no Supabase.
 2. Execute [`supabase_schema.sql`](./supabase_schema.sql) no SQL Editor.
    Se o schema inicial já foi executado, use [`supabase_migration_v2.sql`](./supabase_migration_v2.sql).
+   Para instalações que já aplicaram a V2, execute também [`supabase_migration_v3.sql`](./supabase_migration_v3.sql).
 3. Configure `SUPABASE_URL` e `SUPABASE_ANON_KEY` nos Secrets do ambiente.
 4. Confirme o e-mail da conta criada pela tela de cadastro.
 5. Não use a chave `service_role` no Streamlit.
