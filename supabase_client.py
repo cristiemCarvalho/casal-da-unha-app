@@ -97,8 +97,8 @@ def verify_email_token(token_hash: str, token_type: str = "signup") -> tuple[Any
             "refresh_token": response.session.refresh_token,
         }
         return response.user, None
-    except Exception as error:
-        return None, f"Não foi possível confirmar o e-mail: {error}"
+    except Exception:
+        return None, "Não foi possível confirmar o e-mail. Solicite um novo link."
 
 
 def sign_out() -> None:

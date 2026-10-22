@@ -270,6 +270,11 @@ def garantir_cliente_persistente(nome: str, telefone: str = "") -> str | None:
 
 def render_autenticacao():
     st.markdown(
+        '<meta name="referrer" content="no-referrer">'
+        '<meta http-equiv="Referrer-Policy" content="no-referrer">',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
         '<div class="hero"><div class="eyebrow">Casal da Unha · Área segura</div>'
         '<div class="hero-title">Seu estúdio, organizado com intenção ✨</div>'
         '<div class="hero-copy">Entre para acessar agenda, clientes, fichas técnicas e evolução visual em um espaço individual.</div></div>',
@@ -289,13 +294,20 @@ def render_autenticacao():
 
     token_hash = st.query_params.get("token_hash")
     confirmation_type = st.query_params.get("type", "signup")
-    if token_hash:
-        usuario, erro = verify_email_token(token_hash, confirmation_type)
+    if token_hash and "pending_email_token" not in st.session_state:
+        st.session_state.pending_email_token = token_hash
+        st.session_state.pending_email_token_type = confirmation_type
+        st.query_params.clear()
+        st.rerun()
+
+    pending_token = st.session_state.pop("pending_email_token", None)
+    pending_type = st.session_state.pop("pending_email_token_type", "signup")
+    if pending_token:
+        usuario, erro = verify_email_token(pending_token, pending_type)
         if erro:
             st.error(erro)
         else:
             st.session_state.auth_user = usuario
-            st.query_params.clear()
             st.success("E-mail confirmado. Sua conta está pronta.")
             st.rerun()
         return
